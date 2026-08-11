@@ -250,7 +250,9 @@ gizmo.addEventListener('dragging-changed', (e) => {
   // Snapping is skipped for a scripted tool - findSnap works in authored
   // coordinates, but what you just dragged was the posed magnet, so a snap
   // would clip it to a neighbour it is not actually touching on screen.
-  if (m && state.view.snap && !isScripted(m)) {
+  // Alt suppresses it for this drop only, so free placement never means
+  // hunting for a checkbox first and remembering to put it back.
+  if (m && state.view.snap && !altHeld && !isScripted(m)) {
     const s = findSnap(m, state.magnets);
     if (s) {
       m.position = s.position;
@@ -344,13 +346,48 @@ function select(sel) {
   refreshMagnetFolder();
 }
 
+// Modifiers are read from the live keyboard rather than from the drag events,
+// because TransformControls forwards neither - and because it lets you decide
+// mid-drag rather than before it.
+//
+//   Alt   drop this one placement without magnet-to-magnet snapping
+//   Ctrl  constrain to round numbers: 15 degrees, or 1 mm
+//
+// The two are deliberately opposites: Alt turns a snap off, Ctrl turns one on.
+const ROTATION_STEP_DEG = 15;
+const TRANSLATION_STEP_MM = 1;
+
+let altHeld = false;
+let ctrlHeld = false;
+
+function applyGizmoSnap() {
+  gizmo.translationSnap = ctrlHeld ? TRANSLATION_STEP_MM : null;
+  gizmo.rotationSnap = ctrlHeld ? (ROTATION_STEP_DEG * Math.PI) / 180 : null;
+}
+
+function readModifiers(e) {
+  altHeld = e.altKey;
+  ctrlHeld = e.ctrlKey || e.metaKey;
+  applyGizmoSnap();
+}
+
+addEventListener('keydown', readModifiers, true);
+addEventListener('keyup', readModifiers, true);
+// Alt-Tab away and back and the keyup never arrives, leaving a modifier stuck
+// on for good. Any loss of focus clears both.
+addEventListener('blur', () => {
+  altHeld = false; ctrlHeld = false; applyGizmoSnap();
+});
+
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (e.key === 'w' || e.key === 'W') gizmo.setMode('translate');
   if (e.key === 'e' || e.key === 'E') gizmo.setMode('rotate');
+  if (e.key === 'h' || e.key === 'H') toggleFreeHand();
   if (e.key === 'Delete') removeMagnet(currentMagnet());
   if (e.key === 'Escape') {
     if (ctxEl.classList.contains('on')) closeContextMenu();
+    else if (freeHand.on) setFreeHand(false);
     else select(null);
   }
 });
@@ -465,6 +502,91 @@ addEventListener('pointerdown', (e) => {
 }, true);
 addEventListener('wheel', closeContextMenu, { passive: true });
 addEventListener('blur', closeContextMenu);
+
+// ---------------------------------------------------------------------------
+// Free hand
+//
+// The gizmo is a CAD idiom: grab an axis, drag along it, let go. That is the
+// wrong shape for a tool you are trying to learn the feel of. Here the magnet
+// simply follows the pointer, in the nail's own plane, with the clock running -
+// so the pile answers while you move rather than after you drop.
+//
+// The clock is the point. Held still, the finish is whatever the static solve
+// says and the path you took to get there is irrelevant; running, the pile
+// lags, and how fast you swept starts to matter. That is the thing worth
+// building muscle memory for.
+// ---------------------------------------------------------------------------
+
+const freeHand = { on: false, id: null, standoff: 0 };
+const fhPlane = new THREE.Plane();
+const fhHit = new THREE.Vector3();
+const fhBadge = document.getElementById('freehand');
+
+function setFreeHand(on) {
+  const m = currentMagnet();
+  if (on && !m) return; // nothing to hold
+  freeHand.on = on;
+  freeHand.id = on ? m.id : null;
+
+  if (on) {
+    // Height above the plate is held constant while the pointer steers, and is
+    // whatever the tool was already at - so entering the mode never jumps it.
+    const f = nailFrame(state.nail);
+    const d = [
+      m.position[0] - f.origin[0], m.position[1] - f.origin[1], m.position[2] - f.origin[2],
+    ];
+    freeHand.standoff = d[0] * f.z[0] + d[1] * f.z[1] + d[2] * f.z[2];
+    // A hand-driven take only means anything against a clock.
+    state.sim.live = true;
+    state.sim.running = true;
+    gizmo.detach();
+  } else if (selected?.kind === 'magnet') {
+    const mesh = magnetMeshes.get(selected.id);
+    if (mesh) gizmo.attach(mesh);
+  }
+
+  orbit.enabled = !on; // or every sweep would also swing the camera
+  fhBadge.classList.toggle('on', on);
+  markDirty();
+}
+
+function toggleFreeHand() { setFreeHand(!freeHand.on); }
+
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!freeHand.on) return;
+  const m = state.magnets.find((x) => x.id === freeHand.id);
+  if (!m) { setFreeHand(false); return; }
+
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+
+  // Steer in the plane parallel to the nail at the held standoff, so the tool
+  // sweeps ACROSS the plate rather than diving into the finger.
+  const f = nailFrame(state.nail);
+  const n = new THREE.Vector3(f.z[0], f.z[1], f.z[2]);
+  const p = new THREE.Vector3(
+    f.origin[0] + f.z[0] * freeHand.standoff,
+    f.origin[1] + f.z[1] * freeHand.standoff,
+    f.origin[2] + f.z[2] * freeHand.standoff,
+  );
+  fhPlane.setFromNormalAndCoplanarPoint(n, p);
+  if (!raycaster.ray.intersectPlane(fhPlane, fhHit)) return;
+
+  m.position = [fhHit.x, fhHit.y, fhHit.z];
+  syncMagnetMesh(magnetMeshes.get(m.id), m);
+  markDirty();
+});
+
+// The wheel raises and lowers the tool instead of zooming, which is the axis
+// the pointer cannot supply and the one that decides how sharp the line is.
+renderer.domElement.addEventListener('wheel', (e) => {
+  if (!freeHand.on) return;
+  e.preventDefault();
+  freeHand.standoff = Math.max(1, freeHand.standoff + (e.deltaY > 0 ? 0.8 : -0.8));
+  markDirty();
+}, { passive: false });
 
 // ---------------------------------------------------------------------------
 // Building
@@ -1120,7 +1242,12 @@ const CONTROL_HELP = {
   'show-through falloff': 'How quickly the base coat is hidden as pile density rises.',
   'unaligned glitter': 'Sparkle from flakes that never aligned. Independent of the pile direction.',
   '3D channel': 'Swaps the 3D view for a diagnostic map - field strength, tilt, order and so on - instead of the shaded finish.',
-  'snap magnets together': 'When a drag ends, nearby magnets click face-to-face. Turn off for free placement.',
+  'snap magnets together':
+    'When a drag ends, nearby magnets click face-to-face. Hold Alt while '
+    + 'dropping to skip it for one placement without turning this off.',
+  '✋ steer selected by hand (H)':
+    'The tool follows the pointer in the nail\'s own plane, with the clock '
+    + 'running, so the pile answers while you move. Wheel raises and lowers it.',
   'live-clock res (length)': 'Solve grid used while the clock runs. Lower to keep playback smooth.',
   'live-clock res (width)': 'Solve grid used while the clock runs. Lower to keep playback smooth.',
   'solve res (length)': 'Solve grid for the static, full-quality solve.',
@@ -1165,6 +1292,8 @@ function buildMagnetControls() {
   magnetFolder.add(actions, 'add').name('+ add magnet');
   magnetFolder.add(actions, 'duplicate').name('duplicate selected');
   magnetFolder.add(actions, 'remove').name('delete selected');
+  magnetFolder.add({ hand: () => toggleFreeHand() }, 'hand')
+    .name('✋ steer selected by hand (H)');
 
   for (const m of state.magnets) {
     const f = magnetFolder.addFolder(m.name || m.type);
@@ -1433,4 +1562,9 @@ window.__app = {
   syncMaterial,
   get grid() { return grid; },
   get finish() { return finish; },
+  // Input state, which is otherwise only observable by actually using a mouse.
+  gizmo,
+  get freeHand() { return freeHand; },
+  get modifiers() { return { alt: altHeld, ctrl: ctrlHeld }; },
+  setFreeHand,
 };

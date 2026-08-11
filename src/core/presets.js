@@ -105,11 +105,27 @@ export const PRESETS = {
   },
 
   catEyeBelow: {
-    label: 'Cat eye from below (convex fan) — not reachable on a real hand',
+    label: 'Cat eye from below (convex fan) — a thought experiment: '
+         + 'the wand has to be inside the finger',
     finger: false,
-    note: 'A THOUGHT EXPERIMENT, and the only scene here that is: the wand is '
-        + 'inside the finger, so the finger is hidden. You cannot do this on a '
-        + 'hand. It earns its place because it isolates one variable - which '
+    note: 'A THOUGHT EXPERIMENT, and the only scene here that is - but not for '
+        + 'the reason you might expect. Putting a magnet UNDER the finger is '
+        + 'perfectly easy: you rest your fingertip on it. What you cannot do is '
+        + 'get it CLOSE. A fingertip is 18 mm thick, so the pad puts the wand '
+        + 'about 21 mm from the plate, and the convex fan does not survive '
+        + 'that far. Measured with this tool: convex at 7.3 deg/mm at 8 mm '
+        + 'down, 0.4 at 19 mm, flat at 20 mm, and CONCAVE from 21 mm - which is '
+        + 'almost exactly where the arrangement becomes buildable. The effect '
+        + 'expires within a millimetre or two of where the geometry allows it. '
+        + 'A stronger magnet does not help, and cannot: multiplying every '
+        + 'source by a constant scales |B| everywhere and changes its DIRECTION '
+        + 'nowhere, so the fan gradient is identical at Br = 1.3 and Br = 20. '
+        + 'Only geometry moves it. Tightening the pole spacing does restore '
+        + 'convexity from below - but reach falls as exp(-2 pi z / lambda), so '
+        + 'a 3 mm pitch at the pad delivers 1.5 mT and combs nothing. From '
+        + 'below you can have the convex fan or you can have enough field; the '
+        + 'pole spacing sets both, in opposite directions. '
+        + 'It earns its place because it isolates one variable - which '
         + 'side of the plate the field arcs through - and shows that the sheen '
         + 'reversal follows from that alone. '
         + 'The same wand underneath the nail. The field still arcs from one pole '

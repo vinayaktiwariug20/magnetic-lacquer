@@ -528,3 +528,50 @@ describe('fan geometry: convex from below, concave from above', () => {
     expect(check('endBar').fanKind).toBe('concave');
   });
 });
+
+describe('the cat eye from below expires just as it becomes buildable', () => {
+  // The preset is labelled a thought experiment. The reason is not that a
+  // magnet under the finger is impossible - you rest your fingertip on one -
+  // but that the pad holds it ~21 mm off the plate, and the convex fan does
+  // not reach that far. These pin both halves of that claim.
+
+  const base = PRESETS.catEyeBelow.build();
+  const grid = buildNailGrid({ ...base.nail, resU: 60, resV: 40 });
+  const at = (z, over = {}) => computeFinish(
+    grid, buildFaces([{ ...base.magnets[0], position: [0, 0, z], ...over }]),
+  ).stats;
+
+  it('is convex while the wand is inside the finger, concave once it is not', () => {
+    expect(at(-8).fanKind).toBe('convex');
+    expect(at(-15).fanKind).toBe('convex');
+    expect(at(-19).fanGradient).toBeGreaterThan(0);
+    // The pad sits at about 21 mm. By there the fan has already turned over.
+    expect(at(-21).fanKind).toBe('concave');
+    expect(at(-24).fanGradient).toBeLessThan(0);
+  });
+
+  it('the crossover sits within a couple of mm of the reachable depth', () => {
+    // Two unrelated limits - one geometric, one magnetostatic - landing on top
+    // of each other is the whole point of the scene, so it is worth asserting.
+    let flip = null;
+    for (let z = -5; z >= -26; z -= 1) {
+      if (at(z).fanGradient < 0) { flip = z; break; }
+    }
+    expect(flip).not.toBeNull();
+    const reachable = -21;                       // fingerClearance crosses zero here
+    expect(Math.abs(flip - reachable)).toBeLessThanOrEqual(2);
+  });
+
+  it('no amount of Br rescues it, because direction is scale-invariant', () => {
+    // Scaling every source scales |B| everywhere and rotates it nowhere, so a
+    // stronger magnet buys order and never buys the fan back. This is the
+    // sharpest statement the scene supports.
+    const weak = at(-21, { Br: 1.3 });
+    const absurd = at(-21, { Br: 20 });
+    // Equal to 4e-9, which is summation order over thousands of faces rather
+    // than any real dependence on Br.
+    expect(absurd.fanGradient).toBeCloseTo(weak.fanGradient, 7);
+    expect(absurd.fanKind).toBe(weak.fanKind);
+    expect(absurd.meanOrder).toBeGreaterThan(weak.meanOrder + 0.5); // it does buy order
+  });
+});

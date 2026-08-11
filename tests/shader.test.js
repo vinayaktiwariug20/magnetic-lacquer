@@ -222,15 +222,24 @@ describe('the shell and the script agree on the DOM', () => {
     // The hint is the only documentation these shortcuts have, so it going
     // stale is the whole risk. What the label says, and what KeyboardEvent.key
     // actually reports for it:
+    // Modifiers are read as flags on the event, not as `key` values, so they
+    // are looked for as `altKey` / `ctrlKey` rather than as 'Alt' / 'Control'.
     const REPORTED_AS = {
-      W: ["'w'", "'W'"], E: ["'e'", "'E'"],
+      W: ["'w'", "'W'"], E: ["'e'", "'E'"], H: ["'h'", "'H'"],
       Del: ["'Delete'"], Esc: ["'Escape'"],
+      Ctrl: ['ctrlKey'], Alt: ['altKey'],
     };
     const hint = htmlSrc.split('id="hint"')[1].split('</div>')[0];
     const keys = [...hint.matchAll(/<kbd>([^<]+)<\/kbd>/g)].map((m) => m[1].trim());
     expect(keys.length).toBeGreaterThan(0);
 
-    const handler = mainSrc.split("addEventListener('keydown'")[1].slice(0, 900);
+    // Searched over the whole module rather than the listener body. Handling is
+    // spread across several places - two keydown listeners plus a named
+    // modifier reader - and pinning the test to one of them just makes it break
+    // when the code moves. What it is really guarding is a hint that advertises
+    // a key nothing implements, and a file-wide search catches that.
+    const handler = mainSrc;
+    expect(mainSrc).toContain("addEventListener('keydown'");
     for (const k of keys) {
       const accepted = REPORTED_AS[k];
       expect(accepted, `the hint offers ${k}, which this test does not know`)

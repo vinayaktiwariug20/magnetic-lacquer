@@ -25,7 +25,7 @@ that depend on *moving* the tool, and to say when they will and will not work.
 
 ```
 npm install
-npm test      # 231 tests: field solver, finish model, dynamics, validation
+npm test      # 234 tests: field solver, finish model, dynamics, validation
 npm run dev   # http://localhost:5173
 ```
 
@@ -123,7 +123,7 @@ sets the interactive resolution ceiling.
 
 ## Validation
 
-`npm test` — 231 tests. Everything below runs headlessly, and the solver was
+`npm test` — 234 tests. Everything below runs headlessly, and the solver was
 finished and green before any UI existed.
 
 ### The gate: analytic vs quadrature (`tests/rect.test.js`)
@@ -630,6 +630,41 @@ Exactly one preset opts out, and it is required to say so in its own label:
 `catEyeBelow` is a declared thought experiment that isolates which side of the
 plate the field arcs through.
 
+### Why "from below" is a thought experiment, which is subtler than it looks
+
+The obvious objection is a good one: putting a magnet under the finger is not
+hard, you just rest your fingertip on it. No surgery required. That is true, and
+the earlier phrasing here — "not reachable on a real hand" — was wrong.
+
+What you cannot do is get it **close**. The finger is 9 mm in radius with its
+axis 9.6 mm below the plate, so the pad surface sits at 18.6 mm and the wand
+centre lands about **21 mm** down. Sweeping the preset's own tool through that
+range:
+
+| wand depth | clearance | fan | deg/mm | mean \|B\| |
+|---|---|---|---|---|
+| 8 mm | −9.0 (in flesh) | convex | +7.27 | 129 mT |
+| 15 mm | −6.1 (in flesh) | convex | +2.13 | 23 mT |
+| 19 mm | −2.1 (in flesh) | convex | +0.37 | 11 mT |
+| **20 mm** | −1.1 | **flat** | +0.01 | 8.9 mT |
+| **21 mm** | **−0.1 (just buildable)** | **concave** | −0.33 | 7.6 mT |
+
+**The convex fan expires within a millimetre or two of where the arrangement
+becomes buildable.** Two unrelated limits — one anatomical, one magnetostatic —
+land on top of each other, which is the whole reason the scene is worth keeping.
+
+Two corollaries, both measured:
+
+* **A stronger magnet cannot rescue it, ever.** Multiplying every source by a
+  constant scales `|B|` everywhere and rotates it *nowhere*, so the fan gradient
+  is identical at `Br = 1.3` and `Br = 20` — −0.326 in both cases. Strength buys
+  order (0.000 → 0.849) and never buys the fan back. Only geometry moves it.
+* **Tighter poles do restore convexity from below — and destroy the reach.** A
+  3 mm pole pitch at the pad reads convex again, at **1.5 mT**, which combs
+  nothing. Reach falls as `exp(-2 pi z / lambda)`, so from below you can have the
+  convex fan or you can have enough field. The pole spacing sets both, in
+  opposite directions.
+
 ---
 
 ## Rendering
@@ -815,7 +850,7 @@ src/core/      physics + finish, dependency free, runs headless
   presets.js     scene presets (still lifes)
   techniques.js  scenes with motion and a clock
 src/ui/        three.js renderer, shader, GUI
-tests/         231 tests
+tests/         234 tests
 ```
 
 ---
