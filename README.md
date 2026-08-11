@@ -4,6 +4,16 @@ A 3D sandbox for previewing magnetic nail polish (cat-eye / velvet) finishes.
 The magnetic field is solved exactly from a surface-charge model; the finish is
 then *inferred* from that field and shaded with an anisotropic fibre BRDF.
 
+![The cat-eye preset: field lines arcing from one pole to the other across the
+nail, and the bright line that produces](media/hero.jpg)
+
+*The classic cat eye. The wand is drawn translucent above the finger; the traced
+field lines arc from one pole to the other across the plate, lying flat along
+the seam — which is exactly where the flakes lie down and mirror, and why the
+bright line falls there.*
+
+![Close-up of the cat-eye line on the nail](media/cat-eye.jpg)
+
 **This is a physics-driven shading preview, not a simulation of the polish.**
 There is no fluid model and no particle collisions. It predicts where the flake
 pile points, not how the polish flows.
