@@ -423,6 +423,50 @@ export const PRESETS = {
     }),
   },
 
+  heartTool: {
+    label: 'The "heart magnet": a steel V, and the heart it draws',
+    note: 'The viral one, and the only scene here whose tool is not a magnet. '
+        + 'The barrel is a plain cylinder; the thin V in front of it is SOFT '
+        + 'IRON, with no field of its own until the cylinder induces one. Its '
+        + 'magnetisation is solved rather than prescribed - see softIron.js - '
+        + 'and only then does it act as a source. '
+        + 'The point of the scene is that the wire is bent into a V and what '
+        + 'lands on the nail is a HEART. The pattern is not the tool\'s outline '
+        + 'redrawn: it is a level set of the field, and the level set of two '
+        + 'angled poles happens to be heart-shaped - two arms with a dark cleft '
+        + 'straight down the middle, closing to a single bright point below. '
+        + 'Switch the wire\'s shape to `heart` and it gets WORSE, not better: a '
+        + 'closed loop fills its own middle and reads as a bright disc. Bending '
+        + 'the wire into the shape you want is the wrong intuition, which is '
+        + 'why these tools look so odd in the packet. '
+        + 'Watch the readout: with 0.8 mm wire every cell saturates, so a '
+        + 'stronger barrel buys nothing. Thicker wire carries more flux and '
+        + 'blurs the pattern; thinner draws a sharper one and delivers less.',
+    build: () => ({
+      nail: standardNail(),
+      magnets: [
+        createMagnet({
+          type: 'wire',
+          name: 'steel V (soft iron)',
+          iron: true,
+          Br: 0,
+          cellSize: 0.7,
+          // 6.5 mm across a 12 mm nail. At 10 the pattern runs to the
+          // sidewalls; this leaves it centred with margin, which is where
+          // the real ones sit.
+          size: { shape: 'vee', scale: 6.5, thickness: 0.8 },
+          position: [0, 0, 0.9],
+        }),
+        createMagnet({
+          type: 'cylinder',
+          name: 'barrel magnet',
+          size: { radius: 5, height: 14 },
+          position: [0, 0, 16],
+        }),
+      ],
+    }),
+  },
+
   striped: {
     label: 'Pre-patterned striped tool',
     note: 'The same idea as the wand, repeated: a tool of alternating polarity '

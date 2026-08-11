@@ -1571,7 +1571,7 @@ function addWire() {
     cellSize: 0.9,
     // A V, not a heart - see the note in softIron.js. The tool that draws a
     // heart is bent into a V; a heart-shaped wire draws a blob.
-    size: { shape: 'vee', scale: 11, thickness: 1.2 },
+    size: { shape: 'vee', scale: 6.5, thickness: 0.9 },
     position: [c.p[0], c.p[1], c.p[2] + 2.5],
   }));
   if (!hasSource) {
