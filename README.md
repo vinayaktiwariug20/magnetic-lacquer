@@ -25,7 +25,7 @@ that depend on *moving* the tool, and to say when they will and will not work.
 
 ```
 npm install
-npm test      # 237 tests: field solver, finish model, dynamics, validation
+npm test      # 240 tests: field solver, finish model, dynamics, validation
 npm run dev   # http://localhost:5173
 ```
 
@@ -123,7 +123,7 @@ sets the interactive resolution ceiling.
 
 ## Validation
 
-`npm test` — 237 tests. Everything below runs headlessly, and the solver was
+`npm test` — 240 tests. Everything below runs headlessly, and the solver was
 finished and green before any UI existed.
 
 ### The gate: analytic vs quadrature (`tests/rect.test.js`)
@@ -765,6 +765,34 @@ Rearranged, a single isolated cell gives `j = 3 chi / (3 + chi) * b0` — precis
 the textbook answer for a sphere in a uniform field. **The one-cell case is
 exact**, and it is the anchor the tests are built on.
 
+### The "heart magnet", which is the whole point
+
+![A heart-shaped steel wire held over the nail under a plain cylinder magnet,
+with a heart traced on the plate](media/heart-wire.jpg)
+
+The tools sold for this — "magnet for cat eye gel, heart" — are a plain
+cylinder magnet with a length of steel wire bent to a shape stuck on the front.
+**The wire is not a magnet.** It has no field of its own; it carries the
+cylinder's flux out to wherever its tips are, and what lands on the nail is the
+wire's outline re-emitted. That is induced magnetisation and nothing else, which
+is why the solver above had to exist before this could be drawn.
+
+A wire is a `wire` magnet whose `magnetParts` are cylinder segments along a
+bent centre-line, so containment, dicing, drawing and the finger-clearance walk
+all keep working with no special case. Shapes are `heart`, `ring`, `star`, `vee`
+and `line`, at any size and thickness.
+
+Measured with a 10 mm heart in 0.8 mm wire, 0.9 mm off the plate, under a
+5 x 14 mm cylinder at 16 mm: **88 cells, all 88 saturated**, and mean `|B|` on
+the wire's outline more than **3x** the surround — the pattern follows the
+wire, and swapping the heart for a ring changes it. Both are asserted.
+
+That the wire saturates completely is not a detail. A 0.8 mm wire has a small
+cross-section, so it runs out of flux capacity almost immediately, and past that
+it cannot carry any more however strong the magnet behind it is. Thicker wire
+carries more and blurs the outline; thinner wire draws a sharper line and
+delivers less. That trade is the whole design problem of these tools.
+
 ### Why it is solved and not iterated
 
 Sweeping the cells until they settle is the obvious approach, and it works while
@@ -850,7 +878,7 @@ src/core/      physics + finish, dependency free, runs headless
   presets.js     scene presets (still lifes)
   techniques.js  scenes with motion and a clock
 src/ui/        three.js renderer, shader, GUI
-tests/         237 tests
+tests/         240 tests
 ```
 
 ---

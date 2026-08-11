@@ -23,13 +23,14 @@
 
 import {
   quatBasis, quatMul, quatRotate, quatRotateInv, quatConj, quatIdentity,
-  quatFromAxisAngle, mul, add, sub,
+  quatFromAxisAngle, quatFromUnitVectors, mul, add, sub,
 } from './vec.js';
 
 let nextId = 1;
 
 export const MAGNET_TYPES = [
   'box', 'cylinder', 'sphere', 'ring', 'horseshoe', 'array', 'halbachCylinder',
+  'wire',
 ];
 
 export const DEFAULT_BR = 1.3;
@@ -69,6 +70,10 @@ export function defaultSize(type) {
       return { radius: 5, height: 3 };
     case 'sphere':
       return { radius: 6 };
+    case 'wire':
+      // A bent steel wire. Sized like the tools actually sold: a shape about a
+      // nail wide, in wire around a millimetre thick.
+      return { shape: 'heart', scale: 11, thickness: 1.2 };
     case 'ring':
       return { outerRadius: 9, innerRadius: 4, height: 4 };
     case 'halbachCylinder':
@@ -96,11 +101,90 @@ const magSign = (m) => (m.flip ? -1 : 1);
  * @returns {Array<{kind:'box'|'cylinder', offset:number[], quat:number[],
  *                  dims:object, sign:number}>}
  */
+/**
+ * The centre-line of a bent wire, in the body's local XY plane.
+ *
+ * This exists because the interesting soft-iron tools are not primitives. The
+ * "heart magnet" sold for cat-eye gel is a length of steel wire bent to a
+ * shape and stuck on a plain cylinder magnet: the wire has no field of its own,
+ * it just carries the magnet's flux out to wherever its tips are, and the
+ * pattern on the nail is the wire's outline re-emitted. None of that is
+ * expressible as a box or a disc.
+ *
+ * Returned closed (last point repeats the first) for the loops, open for the
+ * rest, and scaled so the shape's widest span is `scale` mm.
+ */
+export function wirePath(shape, scale = 10) {
+  const pts = [];
+  const N = 48;
+  if (shape === 'heart') {
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      // The standard heart curve, which is already the right shape and only
+      // needs normalising.
+      pts.push([
+        16 * Math.sin(t) ** 3,
+        13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t),
+        0,
+      ]);
+    }
+  } else if (shape === 'ring') {
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      pts.push([Math.cos(t), Math.sin(t), 0]);
+    }
+  } else if (shape === 'star') {
+    const P = 5;
+    for (let i = 0; i <= P * 2; i++) {
+      const t = (i / (P * 2)) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 ? 0.42 : 1;
+      pts.push([r * Math.cos(t), r * Math.sin(t), 0]);
+    }
+  } else if (shape === 'vee') {
+    pts.push([-1, 1, 0], [0, -1, 0], [1, 1, 0]);
+  } else { // 'line'
+    pts.push([-1, 0, 0], [1, 0, 0]);
+  }
+
+  // Normalise so the widest span across the shape is `scale`.
+  let span = 0;
+  for (const p of pts) span = Math.max(span, Math.abs(p[0]), Math.abs(p[1]));
+  const k = span > 0 ? (scale * 0.5) / span : 1;
+  return pts.map((p) => [p[0] * k, p[1] * k, p[2] * k]);
+}
+
+export const WIRE_SHAPES = ['heart', 'ring', 'star', 'vee', 'line'];
+
 export function magnetParts(m) {
   const s = m.size;
   const sgn = magSign(m);
 
   switch (m.type) {
+    case 'wire': {
+      // One cylinder per segment of the centre-line. Expressing it this way
+      // rather than as a new primitive means containment, dicing, drawing and
+      // the finger-clearance walk all keep working with no special case.
+      const path = wirePath(s.shape ?? 'heart', s.scale ?? 10);
+      const r = (s.thickness ?? 1.2) * 0.5;
+      const parts = [];
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        const len = Math.hypot(d[0], d[1], d[2]);
+        if (len < 1e-9) continue;
+        parts.push({
+          kind: 'cylinder',
+          offset: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2],
+          quat: quatFromUnitVectors([0, 0, 1], [d[0] / len, d[1] / len, d[2] / len]),
+          // Overlap the segments slightly so the wire has no gaps at corners.
+          dims: { radius: r, height: len + r },
+          sign: sgn,
+        });
+      }
+      return parts;
+    }
+
     case 'box':
       return [{
         kind: 'box',
@@ -442,6 +526,14 @@ export function magnetExtents(m) {
     case 'box': return [s.sx * 0.5, s.sy * 0.5, s.sz * 0.5];
     case 'cylinder': return [s.radius, s.radius, s.height * 0.5];
     case 'sphere': return [s.radius, s.radius, s.radius];
+    case 'wire': {
+      const r = (s.thickness ?? 1.2) * 0.5;
+      let hx = 0; let hy = 0;
+      for (const p of wirePath(s.shape ?? 'heart', s.scale ?? 10)) {
+        hx = Math.max(hx, Math.abs(p[0])); hy = Math.max(hy, Math.abs(p[1]));
+      }
+      return [hx + r, hy + r, r];
+    }
     case 'ring': return [s.outerRadius, s.outerRadius, s.height * 0.5];
     case 'halbachCylinder':
       return [s.outerRadius, s.outerRadius, s.height * 0.5];

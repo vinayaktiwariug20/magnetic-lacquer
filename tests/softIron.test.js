@@ -11,7 +11,7 @@ import {
   solveSoftIron, voxelize, totalMoment, sphereMagnetisationExact, SOFT_IRON,
 } from '../src/core/softIron.js';
 import { sampleFaces, buildFaces } from '../src/core/field.js';
-import { createMagnet } from '../src/core/magnet.js';
+import { createMagnet, wirePath, WIRE_SHAPES } from '../src/core/magnet.js';
 
 /**
  * A genuinely uniform applied field, which no finite magnet produces.
@@ -267,5 +267,72 @@ describe('several bodies in one solve', () => {
     // End to end along the field, two bars help each other: less demagnetising
     // factor together than separately.
     expect(near).toBeGreaterThan(away * 1.05);
+  });
+});
+
+describe('a bent wire puts its own shape on the nail', () => {
+  // The mechanism behind the "heart magnet" sold for cat-eye gel: the wire is
+  // not the magnet. A plain cylinder supplies the flux, the steel carries it
+  // out to wherever its tips are, and what lands on the plate is the wire's
+  // outline re-emitted. If that is not what happens, the feature is decoration.
+
+  const barrel = createMagnet({
+    type: 'cylinder', Br: 1.3, size: { radius: 5, height: 14 }, position: [0, 0, 16],
+  });
+  const heart = iron({
+    type: 'wire', size: { shape: 'heart', scale: 10, thickness: 0.8 },
+    position: [0, 0, 0.9],
+  });
+
+  it('the wire is what the nail sees, not the magnet behind it', () => {
+    const src = buildFaces([barrel]);
+    const sol = solveSoftIron(heart, src, { cellSize: 0.7 });
+    expect(sol.cells).toBeGreaterThan(40);
+
+    // Sample the iron's own field just under the plate, on the wire's outline
+    // and well outside it. Comparing against the enclosed area would be the
+    // wrong test - a closed loop of magnetised wire fills its own middle - so
+    // the claim being checked is that the pattern FOLLOWS the wire and falls
+    // away from it.
+    const path = wirePath('heart', 10);
+    const at = (x, y) => Math.hypot(...sampleFaces(sol.faces, [x, y, -0.4]));
+    const onWire = path.filter((_, i) => i % 6 === 0).map((p) => at(p[0], p[1]));
+    const outside = [[8, 8], [-8, 8], [8, -8], [-8, -8], [0, 9]].map(([x, y]) => at(x, y));
+
+    const meanOn = onWire.reduce((s, v) => s + v, 0) / onWire.length;
+    const meanOut = outside.reduce((s, v) => s + v, 0) / outside.length;
+    expect(meanOn, 'the outline should be far brighter than the surround')
+      .toBeGreaterThan(meanOut * 3);
+  });
+
+  it('changing the shape changes the pattern', () => {
+    // The strongest statement available: nothing else about the scene moves.
+    const src = buildFaces([barrel]);
+    const probe = (shape) => {
+      const body = iron({
+        type: 'wire', size: { shape, scale: 10, thickness: 0.8 },
+        position: [0, 0, 0.9],
+      });
+      const sol = solveSoftIron(body, src, { cellSize: 0.8 });
+      // A coarse signature of the pattern over the plate.
+      const out = [];
+      for (let x = -5; x <= 5; x += 2.5) {
+        for (let y = -5; y <= 5; y += 2.5) {
+          out.push(Math.hypot(...sampleFaces(sol.faces, [x, y, -0.4])));
+        }
+      }
+      return out;
+    };
+    const h = probe('heart');
+    const r = probe('ring');
+    const diff = h.reduce((s, v, i) => s + Math.abs(v - r[i]), 0)
+      / h.reduce((s, v) => s + v, 0);
+    expect(diff, 'a heart and a ring should not read the same').toBeGreaterThan(0.1);
+  });
+
+  it('a wire with no magnet near it does nothing at all', () => {
+    const sol = solveSoftIron(heart, [], { cellSize: 0.9 });
+    expect(sol.cells).toBeGreaterThan(20);
+    expect(sol.faces).toHaveLength(0);
   });
 });

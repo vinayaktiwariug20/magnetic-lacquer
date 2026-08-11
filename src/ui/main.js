@@ -11,7 +11,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import GUI from 'lil-gui';
 
 import {
-  createMagnet, MAGNET_TYPES, defaultSize, insideAnyMagnet,
+  createMagnet, MAGNET_TYPES, defaultSize, insideAnyMagnet, WIRE_SHAPES,
 } from '../core/magnet.js';
 import {
   createNail, buildNailGrid, fingerFor, nailCentre, fingerClearanceAll,
@@ -1373,6 +1373,7 @@ function buildMagnetControls() {
   magnetFolder.add(actions, 'add').name('+ add magnet');
   magnetFolder.add(actions, 'duplicate').name('duplicate selected');
   magnetFolder.add({ iron: () => addIron() }, 'iron').name('+ add iron piece');
+  magnetFolder.add({ wire: () => addWire() }, 'wire').name('+ add steel wire (heart)');
   magnetFolder.add(actions, 'remove').name('delete selected');
   magnetFolder.add({ hand: () => toggleFreeHand() }, 'hand')
     .name('✋ steer selected by hand (H)');
@@ -1409,7 +1410,11 @@ function buildMagnetControls() {
 
     const geoChanged = () => { rebuildMagnetMeshes(); markDirty(); };
     const s = m.size;
-    if (m.type === 'box') {
+    if (m.type === 'wire') {
+      f.add(s, 'shape', WIRE_SHAPES).name('bent into').onChange(geoChanged);
+      f.add(s, 'scale', 4, 26, 0.5).name('size across (mm)').onChange(geoChanged);
+      f.add(s, 'thickness', 0.4, 3, 0.1).name('wire thickness (mm)').onChange(geoChanged);
+    } else if (m.type === 'box') {
       f.add(s, 'sx', 1, 60, 0.5).name('width X').onChange(geoChanged);
       f.add(s, 'sy', 1, 60, 0.5).name('depth Y').onChange(geoChanged);
       f.add(s, 'sz', 0.5, 60, 0.5).name('thickness Z (magnetised)').onChange(geoChanged);
@@ -1550,6 +1555,36 @@ function addIron() {
   markDirty();
 }
 
+/**
+ * A bent steel wire, plus the barrel magnet that drives it - because on its own
+ * a wire does nothing at all, and adding one without a source would look like
+ * the feature was broken.
+ */
+function addWire() {
+  const c = nailCentre(state.nail);
+  const hasSource = state.magnets.some((m) => !m.iron && m.enabled !== false);
+  state.magnets.push(createMagnet({
+    type: 'wire',
+    name: 'steel wire',
+    iron: true,
+    Br: 0,
+    cellSize: 0.9,
+    size: { shape: 'heart', scale: 11, thickness: 1.2 },
+    position: [c.p[0], c.p[1], c.p[2] + 2.5],
+  }));
+  if (!hasSource) {
+    state.magnets.push(createMagnet({
+      type: 'cylinder',
+      name: 'barrel magnet',
+      size: { radius: 4, height: 12 },
+      position: [c.p[0], c.p[1], c.p[2] + 13],
+    }));
+  }
+  rebuildMagnetMeshes();
+  rebuildGUI();
+  markDirty();
+}
+
 function duplicateMagnet(m) {
   if (!m) return;
   state.magnets.push(createMagnet({
@@ -1675,6 +1710,10 @@ window.__app = {
   get finish() { return finish; },
   // Input state, which is otherwise only observable by actually using a mouse.
   gizmo,
+  // Editing state.magnets from the console leaves the meshes stale, which
+  // looks like a rendering bug and is not one - this is how to resync.
+  rebuildMagnetMeshes,
+  rebuildGUI,
   get freeHand() { return freeHand; },
   get modifiers() { return { alt: altHeld, ctrl: ctrlHeld }; },
   setFreeHand,
