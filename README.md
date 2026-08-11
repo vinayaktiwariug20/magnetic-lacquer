@@ -25,7 +25,7 @@ that depend on *moving* the tool, and to say when they will and will not work.
 
 ```
 npm install
-npm test      # 240 tests: field solver, finish model, dynamics, validation
+npm test      # 243 tests: field solver, finish model, dynamics, validation
 npm run dev   # http://localhost:5173
 ```
 
@@ -123,7 +123,7 @@ sets the interactive resolution ceiling.
 
 ## Validation
 
-`npm test` — 240 tests. Everything below runs headlessly, and the solver was
+`npm test` — 243 tests. Everything below runs headlessly, and the solver was
 finished and green before any UI existed.
 
 ### The gate: analytic vs quadrature (`tests/rect.test.js`)
@@ -767,31 +767,54 @@ exact**, and it is the anchor the tests are built on.
 
 ### The "heart magnet", which is the whole point
 
-![A heart-shaped steel wire held over the nail under a plain cylinder magnet,
-with a heart traced on the plate](media/heart-wire.jpg)
+![A V-shaped steel wire held over the nail under a plain cylinder magnet, and
+the heart-shaped field pattern it produces](media/v-makes-a-heart.jpg)
+
+*The tool is the thin steel **V** lying over the nail; the disc above it is the
+plain cylinder magnet, drawn translucent. The panel on the right is the field
+over the plate: two lobes, a dark cleft down the middle, closing to a point.
+Nothing in the tool is heart-shaped.*
 
 The tools sold for this — "magnet for cat eye gel, heart" — are a plain
-cylinder magnet with a length of steel wire bent to a shape stuck on the front.
-**The wire is not a magnet.** It has no field of its own; it carries the
-cylinder's flux out to wherever its tips are, and what lands on the nail is the
-wire's outline re-emitted. That is induced magnetisation and nothing else, which
-is why the solver above had to exist before this could be drawn.
+cylinder magnet with a length of steel wire stuck on the front. **The wire is
+not a magnet.** It has no field of its own; it carries the cylinder's flux out
+to wherever its tips are. That is induced magnetisation and nothing else, which
+is why the solver above had to exist before any of this could be drawn.
 
-A wire is a `wire` magnet whose `magnetParts` are cylinder segments along a
-bent centre-line, so containment, dicing, drawing and the finger-clearance walk
-all keep working with no special case. Shapes are `heart`, `ring`, `star`, `vee`
-and `line`, at any size and thickness.
+**And the wire is not bent into a heart. It is bent into a V.** Two short prongs
+at an angle, and that is the entire tool. The heart is not the wire's outline
+re-emitted — it is a *level set of the field*, and the level set of two angled
+poles happens to be heart-shaped.
 
-Measured with a 10 mm heart in 0.8 mm wire, 0.9 mm off the plate, under a
-5 x 14 mm cylinder at 16 mm: **88 cells, all 88 saturated**, and mean `|B|` on
-the wire's outline more than **3x** the surround — the pattern follows the
-wire, and swapping the heart for a ring changes it. Both are asserted.
+Measured, `|B|` that the wire adds over the plate, across the nail at each row:
 
-That the wire saturates completely is not a detail. A 0.8 mm wire has a small
-cross-section, so it runs out of flux capacity almost immediately, and past that
-it cannot carry any more however strong the magnet behind it is. Thicker wire
-carries more and blurs the outline; thinner wire draws a sharper line and
-delivers less. That trade is the whole design problem of these tools.
+| row | x = −4.2 | −2.6 | **0** | +2.6 | +4.2 | |
+|---|---|---|---|---|---|---|
+| y = +3 | 0.126 | 0.064 | **0.017** | 0.064 | 0.126 | cleft |
+| y = +1 | 0.079 | 0.103 | **0.022** | 0.103 | 0.079 | cleft |
+| y = −1 | 0.035 | 0.090 | **0.018** | 0.090 | 0.035 | cleft |
+| y = −4 | 0.010 | 0.021 | **0.036** | 0.021 | 0.010 | **cusp** |
+
+Two arms with a dark cleft straight down the middle, closing to a single bright
+point at the bottom. That is a heart, and nothing in the tool is heart-shaped.
+
+**Bending the wire into an actual heart does the opposite.** A closed loop fills
+its own middle: at `y = +2`, where the V reads 0.020 on the axis against 0.093
+at the lobes, a heart-shaped wire reads **0.149 on the axis against 0.055** —
+a bright disc, not an outline. "Bend it into the shape you want" is exactly the
+wrong intuition for these tools, and the sandbox says so in numbers.
+
+A wire is a `wire` magnet whose `magnetParts` are cylinder segments along a bent
+centre-line, so containment, dicing, drawing and the finger-clearance walk all
+keep working with no special case. Shapes are `vee`, `heart`, `ring`, `star` and
+`line`, at any size and thickness — so the claim above can be checked rather
+than taken on trust.
+
+One more thing the numbers show: with 0.8 mm wire, **every cell saturates**. A
+thin wire has little cross-section, so it runs out of flux capacity at once and
+cannot carry more however strong the magnet behind it. Thicker wire carries more
+and blurs the pattern; thinner draws a sharper one and delivers less. That trade
+is the real design problem these tools have.
 
 ### Why it is solved and not iterated
 
@@ -878,7 +901,7 @@ src/core/      physics + finish, dependency free, runs headless
   presets.js     scene presets (still lifes)
   techniques.js  scenes with motion and a clock
 src/ui/        three.js renderer, shader, GUI
-tests/         240 tests
+tests/         243 tests
 ```
 
 ---

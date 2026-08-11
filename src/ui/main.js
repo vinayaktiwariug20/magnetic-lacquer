@@ -1373,7 +1373,7 @@ function buildMagnetControls() {
   magnetFolder.add(actions, 'add').name('+ add magnet');
   magnetFolder.add(actions, 'duplicate').name('duplicate selected');
   magnetFolder.add({ iron: () => addIron() }, 'iron').name('+ add iron piece');
-  magnetFolder.add({ wire: () => addWire() }, 'wire').name('+ add steel wire (heart)');
+  magnetFolder.add({ wire: () => addWire() }, 'wire').name('+ add steel wire (V, draws a heart)');
   magnetFolder.add(actions, 'remove').name('delete selected');
   magnetFolder.add({ hand: () => toggleFreeHand() }, 'hand')
     .name('✋ steer selected by hand (H)');
@@ -1569,7 +1569,9 @@ function addWire() {
     iron: true,
     Br: 0,
     cellSize: 0.9,
-    size: { shape: 'heart', scale: 11, thickness: 1.2 },
+    // A V, not a heart - see the note in softIron.js. The tool that draws a
+    // heart is bent into a V; a heart-shaped wire draws a blob.
+    size: { shape: 'vee', scale: 11, thickness: 1.2 },
     position: [c.p[0], c.p[1], c.p[2] + 2.5],
   }));
   if (!hasSource) {

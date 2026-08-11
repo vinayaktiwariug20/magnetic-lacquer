@@ -336,3 +336,65 @@ describe('a bent wire puts its own shape on the nail', () => {
     expect(sol.faces).toHaveLength(0);
   });
 });
+
+describe('the V draws the heart, and the heart does not', () => {
+  // The result that matters here, and the one that is easy to get backwards.
+  //
+  // The tool sold as a "heart magnet" is a wire bent into a V - two short
+  // prongs at an angle, nothing more. The heart on the nail is NOT the wire's
+  // outline re-emitted. It is a level set of the field, and the level set of
+  // two angled poles happens to be heart-shaped: two lobes at the top with a
+  // cleft between them, converging to a point below.
+  //
+  // Bending the wire into an actual heart does the opposite. A closed loop
+  // fills its own middle, so it reads as a bright disc rather than an outline.
+
+  const barrel = createMagnet({
+    type: 'cylinder', Br: 1.3, size: { radius: 5, height: 14 }, position: [0, 0, 16],
+  });
+
+  /** What the wire ADDS over the plate, with the barrel's broad bump removed. */
+  function wireField(shape) {
+    const src = buildFaces([barrel]);
+    const body = iron({
+      type: 'wire', size: { shape, scale: 10, thickness: 0.8 },
+      position: [0, 0, 0.9],
+    });
+    const sol = solveSoftIron(body, src, { cellSize: 0.7 });
+    return (x, y) => Math.hypot(...sampleFaces(sol.faces, [x, y, -0.4]));
+  }
+
+  it('a V gives two lobes with a dark cleft down the middle', () => {
+    // The top of a heart. Measured, the cleft is deep: 0.020 on the axis
+    // against 0.093 at the lobes, and it holds all the way from y = +4 down
+    // to y = -3.
+    const at = wireField('vee');
+    const y = 2;
+    const centre = at(0, y);
+    const left = at(-2.6, y);
+    const right = at(2.6, y);
+    expect(left).toBeCloseTo(right, 6);            // symmetric, as it must be
+    expect(centre, `cleft ${centre} vs lobes ${left}`).toBeLessThan(left * 0.4);
+  });
+
+  it('...and converges to a single point at the bottom', () => {
+    // The cusp. At y = -4 the axis finally becomes the brightest place, which
+    // is what closes the heart.
+    const at = wireField('vee');
+    const y = -4;
+    expect(at(0, y)).toBeGreaterThan(at(-2.6, y));
+    expect(at(0, y)).toBeGreaterThan(at(2.6, y));
+  });
+
+  it('a heart-shaped wire does the OPPOSITE where it matters', () => {
+    // Same row, same everything, other shape. A closed loop fills its own
+    // middle, so where the V has its cleft the heart has a peak - 0.149 on the
+    // axis against 0.055 either side. Bending the wire into the shape you want
+    // is precisely the wrong intuition for these tools.
+    const vee = wireField('vee');
+    const heart = wireField('heart');
+    const y = 2;
+    expect(vee(0, y)).toBeLessThan(vee(2.6, y));      // cleft
+    expect(heart(0, y)).toBeGreaterThan(heart(2.6, y) * 2); // filled
+  });
+});
