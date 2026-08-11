@@ -25,7 +25,7 @@ that depend on *moving* the tool, and to say when they will and will not work.
 
 ```
 npm install
-npm test      # 234 tests: field solver, finish model, dynamics, validation
+npm test      # 237 tests: field solver, finish model, dynamics, validation
 npm run dev   # http://localhost:5173
 ```
 
@@ -123,7 +123,7 @@ sets the interactive resolution ceiling.
 
 ## Validation
 
-`npm test` — 234 tests. Everything below runs headlessly, and the solver was
+`npm test` — 237 tests. Everything below runs headlessly, and the solver was
 finished and green before any UI existed.
 
 ### The gate: analytic vs quadrature (`tests/rect.test.js`)
@@ -850,7 +850,7 @@ src/core/      physics + finish, dependency free, runs headless
   presets.js     scene presets (still lifes)
   techniques.js  scenes with motion and a clock
 src/ui/        three.js renderer, shader, GUI
-tests/         234 tests
+tests/         237 tests
 ```
 
 ---

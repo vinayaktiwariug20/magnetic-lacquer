@@ -186,14 +186,21 @@ export function solveSoftIron(bodies, sourceFaces, opts = {}) {
 
   const list = Array.isArray(bodies) ? bodies : [bodies];
   const centers = [];
-  let radius = 0;
-  let volume = 0;
+  // Per cell, not per solve: two bodies of different sizes do not divide into
+  // the same lattice even at one requested pitch, so a single radius would be
+  // wrong for every body but the last.
+  const radii = [];
+  const volumes = [];
   for (const b of list) {
     const v = voxelize(b, cellSize);
-    centers.push(...v.centers);
-    radius = v.radius;
-    volume = v.volume;
+    for (const c of v.centers) {
+      centers.push(c);
+      radii.push(v.radius);
+      volumes.push(v.volume);
+    }
   }
+  const radius = radii.length ? radii[0] : 0;
+  const volume = volumes.length ? volumes[0] : 0;
   const n = centers.length;
   if (!n) return { faces: [], cells: 0, passes: 0, saturated: 0, magnetisation: [], centers: [], volume: 0, radius: 0 };
 
@@ -211,7 +218,7 @@ export function solveSoftIron(bodies, sourceFaces, opts = {}) {
   for (let i = 0; i < n; i++) {
     for (let k = 0; k < n; k++) {
       if (k === i) continue; // self term is analytic, and lives in `gain`
-      dipoleTensor(centers[i], centers[k], radius, t9);
+      dipoleTensor(centers[i], centers[k], radii[k], t9);
       for (let a = 0; a < 3; a++) {
         for (let b = 0; b < 3; b++) T[(3 * i + a) * N + 3 * k + b] = t9[3 * a + b];
       }
@@ -275,13 +282,13 @@ export function solveSoftIron(bodies, sourceFaces, opts = {}) {
     const v = [j[3 * i], j[3 * i + 1], j[3 * i + 2]];
     magnetisation.push(v);
     if (Math.hypot(v[0], v[1], v[2]) > Bs * 0.999) saturated++;
-    const f = cellFace(centers[i], radius, v);
+    const f = cellFace(centers[i], radii[i], v);
     if (f) faces.push(f);
   }
 
   return {
     faces, cells: n, passes, saturated,
-    volume, radius, magnetisation, centers,
+    volume, radius, volumes, radii, magnetisation, centers,
   };
 }
 
@@ -292,11 +299,13 @@ export function solveSoftIron(bodies, sourceFaces, opts = {}) {
  */
 export function totalMoment(solution) {
   const t = [0, 0, 0];
-  for (const j of solution.magnetisation) {
-    t[0] += j[0]; t[1] += j[1]; t[2] += j[2];
-  }
-  const v = solution.volume;
-  return [t[0] * v, t[1] * v, t[2] * v];
+  // Weighted per cell, because cells from different bodies need not be the
+  // same size even when one pitch was asked for.
+  solution.magnetisation.forEach((j, i) => {
+    const v = solution.volumes?.[i] ?? solution.volume;
+    t[0] += j[0] * v; t[1] += j[1] * v; t[2] += j[2] * v;
+  });
+  return t;
 }
 
 /**

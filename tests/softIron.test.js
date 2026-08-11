@@ -221,3 +221,51 @@ describe('dicing', () => {
     expect(Math.abs(diced / exact - 1), "diced volume vs the true sphere").toBeLessThan(0.08);
   });
 });
+
+describe('several bodies in one solve', () => {
+  // The UI puts all the iron into a single solve, because solving each body
+  // alone would drop the coupling between them - and that coupling is the
+  // whole mechanism of a shaped tool, where a bent wire is several pieces
+  // whose job is to carry each other's flux around a corner.
+
+  const chi = SOFT_IRON.chi;
+  const b0 = [0, 0, 0.01];
+  const opts = { cellSize: 1.5, chi, Bs: 99 };
+
+  it('two identical bodies far apart give twice one body', () => {
+    const one = iron({ type: 'sphere', size: { radius: 3 }, position: [0, 0, 0] });
+    const far = iron({ type: 'sphere', size: { radius: 3 }, position: [400, 0, 0] });
+    const single = totalMoment(solveSoftIron([one], uniformField(b0), opts))[2];
+    const pair = totalMoment(solveSoftIron([one, far], uniformField(b0), opts))[2];
+    expect(pair / single).toBeCloseTo(2, 3);
+  });
+
+  it('bodies of different sizes are weighted by their own cell volume', () => {
+    // The bug this guards: taking the cell radius and volume from the LAST body
+    // diced, which is wrong for every other body the moment they differ.
+    const small = iron({ type: 'box', size: { sx: 3, sy: 3, sz: 3 }, position: [0, 0, 0] });
+    const big = iron({ type: 'box', size: { sx: 9, sy: 9, sz: 9 }, position: [300, 0, 0] });
+    const mS = totalMoment(solveSoftIron([small], uniformField(b0), opts))[2];
+    const mB = totalMoment(solveSoftIron([big], uniformField(b0), opts))[2];
+    const together = totalMoment(solveSoftIron([small, big], uniformField(b0), opts))[2];
+    // Far apart, the pair is the sum of the two solved alone - but only to
+    // about 1e-5, because a dipole field never actually reaches zero and at
+    // 300 mm these two still feel each other slightly. That residue is the
+    // coupling working, not an error in it.
+    expect(Math.abs(together - (mS + mB)) / Math.abs(mS + mB)).toBeLessThan(1e-4);
+    const swapped = totalMoment(solveSoftIron([big, small], uniformField(b0), opts))[2];
+    expect(swapped).toBeCloseTo(together, 9);
+  });
+
+  it('touching bodies are not the same as distant ones', () => {
+    // If the coupling were dropped, these two would be indistinguishable.
+    const a1 = iron({ type: 'box', size: { sx: 3, sy: 3, sz: 9 }, position: [0, 0, 0] });
+    const touching = iron({ type: 'box', size: { sx: 3, sy: 3, sz: 9 }, position: [0, 0, 9] });
+    const apart = iron({ type: 'box', size: { sx: 3, sy: 3, sz: 9 }, position: [0, 0, 400] });
+    const near = totalMoment(solveSoftIron([a1, touching], uniformField(b0), opts))[2];
+    const away = totalMoment(solveSoftIron([a1, apart], uniformField(b0), opts))[2];
+    // End to end along the field, two bars help each other: less demagnetising
+    // factor together than separately.
+    expect(near).toBeGreaterThan(away * 1.05);
+  });
+});

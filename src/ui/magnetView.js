@@ -11,6 +11,7 @@ const NORTH = 0xd6453f;
 const SOUTH = 0x3f7fd6;
 const BODY = 0x9aa3ad;
 const YOKE = 0x5f666f;
+const IRON = 0x8d939c;
 
 const bodyMat = () => new THREE.MeshStandardMaterial({
   color: BODY, metalness: 0.65, roughness: 0.42,
@@ -181,6 +182,18 @@ export function buildMagnetMesh(magnet) {
     );
     yoke.position.z = s.yoke * 0.5;
     group.add(yoke);
+  }
+
+  // Iron has no poles of its own until it is put in a field, so painting caps
+  // N and S would state something untrue. It is drawn as plain steel, and the
+  // absence of colour is the tell that it is induced rather than permanent.
+  if (magnet.iron) {
+    group.traverse((o) => {
+      if (!o.material) return;
+      o.material = new THREE.MeshStandardMaterial({
+        color: IRON, metalness: 0.9, roughness: 0.3,
+      });
+    });
   }
 
   group.userData.magnetId = magnet.id;

@@ -17,6 +17,7 @@ import {
   createNail, buildNailGrid, fingerFor, nailCentre, fingerClearanceAll,
 } from '../core/nail.js';
 import { buildFaces, streamline } from '../core/field.js';
+import { solveSoftIron, voxelize, SOFT_IRON } from '../core/softIron.js';
 import { computeFinish, sampleGrid, DEFAULT_FINISH } from '../core/finish.js';
 import { PRESETS, PRESET_KEYS } from '../core/presets.js';
 import { TECHNIQUES, TECHNIQUE_KEYS } from '../core/techniques.js';
@@ -517,6 +518,79 @@ addEventListener('blur', closeContextMenu);
 // building muscle memory for.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Soft iron in the scene
+//
+// An iron body is stored as an ordinary magnet carrying `iron: true`, so
+// selection, the gizmo, the context menu and the finger-clearance check all
+// work on it unchanged. What differs is where its field comes from: it is
+// excluded from the prescribed sources and solved instead, from whatever the
+// real magnets are doing to it.
+//
+// Two things make that affordable. The solve is dense and cubic in the cell
+// count, so it is cached against a signature of every pose that can affect it
+// and only redone when one moves; and the dicing is coarsened automatically
+// until the cell count is inside a budget, because a body diced at 1 mm is a
+// second of arithmetic and nothing here is worth a second.
+// ---------------------------------------------------------------------------
+
+const IRON_CELL_BUDGET = 260;
+let ironCache = { key: null, faces: [], info: null };
+
+/** The dicing pitch that keeps a body inside the budget, coarsening if need be. */
+function affordableCellSize(body, bodyCount = 1) {
+  // The budget is on the WHOLE solve, which is cubic in the total cell count -
+  // so several bodies each get a share of it, not a copy of it.
+  const budget = Math.max(24, Math.floor(IRON_CELL_BUDGET / bodyCount));
+  let cell = Math.max(0.4, body.cellSize ?? 2.5);
+  for (let i = 0; i < 12; i++) {
+    const n = voxelize(body, cell).centers.length;
+    if (n <= budget) return { cell, cells: n };
+    cell *= 1.25;
+  }
+  return { cell, cells: voxelize(body, cell).centers.length };
+}
+
+function solveIron(sources, posed) {
+  const irons = posed.filter((m) => m.iron && m.enabled !== false);
+  if (!irons.length) {
+    ironCache = { key: null, faces: [], info: null };
+    return [];
+  }
+  // Everything that can change the answer, and nothing that cannot - so
+  // orbiting the camera or sweeping the light never triggers a re-solve.
+  const key = JSON.stringify([
+    sources.map((m) => [m.type, m.size, m.position, m.quaternion, m.Br, m.flip]),
+    irons.map((m) => [m.type, m.size, m.position, m.quaternion, m.cellSize]),
+  ]);
+  if (key === ironCache.key) return ironCache.faces;
+
+  const t0 = performance.now();
+  const srcFaces = buildFaces(sources);
+
+  // All the iron goes into ONE solve. Solving each body on its own would drop
+  // the coupling between them, and that coupling is the entire mechanism of a
+  // shaped tool: a bent wire is several pieces of iron whose whole point is
+  // that they carry each other's flux around a corner.
+  let cell = 0;
+  let coarsened = false;
+  for (const body of irons) {
+    const a = affordableCellSize(body, irons.length);
+    cell = Math.max(cell, a.cell);
+    if (a.cell > (body.cellSize ?? 2.5) * 1.001) coarsened = true;
+  }
+  const sol = solveSoftIron(irons, srcFaces, { cellSize: cell });
+  const faces = sol.faces;
+  const cells = sol.cells;
+  const saturated = sol.saturated;
+  ironCache = {
+    key,
+    faces,
+    info: { cells, saturated, coarsened, ms: performance.now() - t0 },
+  };
+  return faces;
+}
+
 const freeHand = { on: false, id: null, standoff: 0 };
 const fhPlane = new THREE.Plane();
 const fhHit = new THREE.Vector3();
@@ -704,7 +778,8 @@ function solve() {
 
   const t0 = performance.now();
   const posed = liveMagnets();
-  const faces = buildFaces(posed);
+  const sources = posed.filter((m) => !m.iron && m.enabled !== false);
+  const faces = buildFaces(sources).concat(solveIron(sources, posed));
 
   // Show the tool where the script is holding it, and hide the ones that are
   // not currently in the hand - otherwise a technique reads as magic.
@@ -869,9 +944,15 @@ function updateReadouts(ms, faces, posed = state.magnets) {
   readoutsEl.innerHTML = rows
     .map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
 
+  const ir = ironCache.info;
   statusEl.textContent =
     `${grid.count} texels · ${faces.length} pole faces · solved in ${ms.toFixed(1)} ms`
-    + (state.sim.live ? ` · ${flakes.perTexel} flakes/texel` : '');
+    + (state.sim.live ? ` · ${flakes.perTexel} flakes/texel` : '')
+    // The iron solve is cached, so its cost is reported separately - it is not
+    // part of the per-frame number above and saying otherwise would mislead.
+    + (ir ? ` · iron: ${ir.cells} cells in ${ir.ms.toFixed(0)} ms`
+      + (ir.saturated ? `, ${ir.saturated} saturated` : '')
+      + (ir.coarsened ? ', dicing coarsened to fit' : '') : '');
 }
 
 // ---------------------------------------------------------------------------
@@ -1291,6 +1372,7 @@ function buildMagnetControls() {
 
   magnetFolder.add(actions, 'add').name('+ add magnet');
   magnetFolder.add(actions, 'duplicate').name('duplicate selected');
+  magnetFolder.add({ iron: () => addIron() }, 'iron').name('+ add iron piece');
   magnetFolder.add(actions, 'remove').name('delete selected');
   magnetFolder.add({ hand: () => toggleFreeHand() }, 'hand')
     .name('✋ steer selected by hand (H)');
@@ -1311,11 +1393,19 @@ function buildMagnetControls() {
       rebuildGUI();
       markDirty();
     });
-    f.add(m, 'Br', 0.1, 1.6, 0.01).name('Br (T)').onChange(markDirty);
-    f.add(m, 'flip').name('flip N-S').onChange(() => {
-      rebuildMagnetMeshes();
-      markDirty();
-    });
+    if (m.iron) {
+      // Iron has no remanence and no poles to flip - both would be meaningless
+      // here, and showing them would suggest the field comes from the body
+      // rather than from what it is standing in.
+      f.add(m, 'cellSize', 0.8, 5, 0.1).name('dicing (mm)').onChange(markDirty);
+      f.add({ note: '' }, 'note').name('induced, not permanent').disable();
+    } else {
+      f.add(m, 'Br', 0.1, 1.6, 0.01).name('Br (T)').onChange(markDirty);
+      f.add(m, 'flip').name('flip N-S').onChange(() => {
+        rebuildMagnetMeshes();
+        markDirty();
+      });
+    }
 
     const geoChanged = () => { rebuildMagnetMeshes(); markDirty(); };
     const s = m.size;
@@ -1433,6 +1523,27 @@ function addMagnet() {
   state.magnets.push(createMagnet({
     type: 'box',
     position: [c.p[0], c.p[1], c.p[2] + 14],
+  }));
+  rebuildMagnetMeshes();
+  rebuildGUI();
+  markDirty();
+}
+
+/**
+ * A piece of soft iron. Small by default and placed just above the nail, which
+ * is where it does something: an iron shape is a passive tool that has to be
+ * inside another magnet's field before it is a magnet at all.
+ */
+function addIron() {
+  const c = nailCentre(state.nail);
+  state.magnets.push(createMagnet({
+    type: 'box',
+    name: 'iron piece',
+    iron: true,
+    Br: 0,
+    size: { sx: 8, sy: 4, sz: 3 },
+    cellSize: 2,
+    position: [c.p[0], c.p[1], c.p[2] + 6],
   }));
   rebuildMagnetMeshes();
   rebuildGUI();

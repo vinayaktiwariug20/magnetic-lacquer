@@ -51,6 +51,11 @@ export function createMagnet(opts = {}) {
     // motion.js. `null` means held still; `active` unset means always held.
     motion: opts.motion ? { ...opts.motion } : null,
     active: opts.active ? [...opts.active] : null,
+    // Soft iron. Such a body carries no remanence of its own - `Br` is ignored -
+    // and its magnetisation is solved from whatever field it is standing in.
+    // See softIron.js. `cellSize` is the dicing pitch in mm.
+    iron: opts.iron ?? false,
+    cellSize: opts.cellSize ?? 2.5,
   };
 }
 
