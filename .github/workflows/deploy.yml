@@ -29,6 +29,9 @@ jobs:
       - run: npm ci
       # The suite gates the deploy: a red solver never reaches the demo.
       - run: npm test
+      # ...and the README has to agree with it about how big the suite is.
+      # That number went stale by 68 tests once already.
+      - run: npm run check:tests
       - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

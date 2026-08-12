@@ -29,6 +29,12 @@ npm test      # 245 tests: field solver, finish model, dynamics, validation
 npm run dev   # http://localhost:5173
 ```
 
+That test count is not maintained by hand. `npm run sync:tests` runs the suite
+and writes the real number into the three places this README quotes it, and CI
+runs the same script with `--check` so it cannot drift — it was once stale by
+68 tests, which is the kind of thing that quietly undermines every other number
+in a document like this.
+
 ---
 
 ## The field solver

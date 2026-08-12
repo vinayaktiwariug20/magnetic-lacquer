@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sync:tests": "node scripts/sync-test-count.mjs",
+    "check:tests": "node scripts/sync-test-count.mjs --check"
   },
   "dependencies": {
     "lil-gui": "^0.20.0",
